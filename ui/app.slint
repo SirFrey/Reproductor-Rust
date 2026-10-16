@@ -372,6 +372,8 @@ export component AppWindow inherits Window {
     in-out property <float> volume: 0.8;
     in-out property <bool> shuffle;
     in property <bool> is-maximized;
+    // Bumped by Rust when the window moves; see the background layer below.
+    in property <int> repaint-nonce;
 
     callback start-drag();
     callback start-resize(int);
@@ -400,8 +402,14 @@ export component AppWindow inherits Window {
     property <length> bob: root.playing ? 3px * Math.sin(root.position * 220deg) : 0px;
 
     // The renderer ignores gradients on the window itself, so they go on a layer.
+    // It also forces full repaints: the software renderer only redraws what changed,
+    // so parts of the window that were off-screen would stay stale when dragged back
+    // into view. Every move flips between two gradients that differ by one unit in
+    // one channel (invisible), which marks the whole window as changed.
     Rectangle {
-        background: @linear-gradient(135deg, Theme.bg-a 0%, Theme.bg-b 55%, Theme.bg-c 100%);
+        background: Math.mod(root.repaint-nonce, 2) == 0
+            ? @linear-gradient(135deg, Theme.bg-a 0%, Theme.bg-b 55%, Theme.bg-c 100%)
+            : @linear-gradient(135deg, Theme.bg-a 0%, Theme.bg-b 55%, #DFF8F0 100%);
     }
 
     // Title-bar area: drag to move (with Windows snap), double-click to maximize.

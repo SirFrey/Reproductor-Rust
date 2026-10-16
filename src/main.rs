@@ -559,6 +559,22 @@ fn main() -> Res<()> {
         let w = weak.clone();
         let _ = slint::invoke_from_event_loop(move || {
             let Some(ui) = w.upgrade() else { return };
+            // Off-screen parts of the window aren't kept by the software renderer's
+            // partial repaints; redraw everything whenever the window moves.
+            let repaint = ui.as_weak();
+            ui.window().on_winit_window_event(move |_, event| {
+                use slint::winit_030::winit::event::WindowEvent as E;
+                let exposes = matches!(
+                    event,
+                    E::Moved(_) | E::Resized(_) | E::ScaleFactorChanged { .. } | E::Occluded(false)
+                );
+                if exposes {
+                    if let Some(ui) = repaint.upgrade() {
+                        ui.set_repaint_nonce(ui.get_repaint_nonce().wrapping_add(1));
+                    }
+                }
+                slint::winit_030::EventResult::Propagate
+            });
             ui.window().with_winit_window(|win| {
                 use slint::winit_030::winit::platform::windows::{CornerPreference, WindowExtWindows};
                 // Without the native frame, ask Windows 11 for its usual shadow and rounded corners.
