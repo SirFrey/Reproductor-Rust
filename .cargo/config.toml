@@ -1,0 +1,8 @@
+# More than 2 parallel rustc jobs exhaust RAM on this machine (webview2-com-sys is huge).
+[build]
+jobs = 2
+
+# Rust's bundled LLVM linker: links faster than MSVC's link.exe (and avoids the
+# coreutils `link.exe` on this machine's PATH shadowing it).
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"

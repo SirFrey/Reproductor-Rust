@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "updated": "2026-10-15",
+  "note": "Clients are tried in order. Roles: full = serves the whole file; head = instantly valid first-MiB URL; library = YouTube Music account/playlists. Client identifiers (client_name, version, user_agent, id, host) are taken automatically from yt-dlp's client table (ytdlp_source: release | master | off); set follow_ytdlp: false on a client to pin the values here.",
+  "clients": [
+    {
+      "name": "tv_downgraded",
+      "roles": ["full"],
+      "host": "www.youtube.com",
+      "id": 7,
+      "client_name": "TVHTML5",
+      "version": "5.20260707",
+      "user_agent": "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version"
+    },
+    {
+      "name": "web_embedded",
+      "roles": ["full"],
+      "host": "www.youtube.com",
+      "id": 56,
+      "client_name": "WEB_EMBEDDED_PLAYER",
+      "embedded": true,
+      "version": "2.20260708.00.00",
+      "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15,gzip(gfe)"
+    },
+    {
+      "name": "web_music",
+      "roles": ["head", "library"],
+      "host": "music.youtube.com",
+      "id": 67,
+      "client_name": "WEB_REMIX",
+      "version": "1.20260707.12.00",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+    }
+  ],
+  "warm_playlist_limit": 25,
+  "range_attempts": 40,
+  "ytdlp_source": "release",
+  "config_url": "https://gist.githubusercontent.com/SirFrey/7bfe37ebfad47cebc6e57a2e93e1b7eb/raw/config.json"
+}

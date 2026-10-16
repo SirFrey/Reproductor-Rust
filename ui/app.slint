@@ -1,0 +1,844 @@
+// Reproductor — kawaii pastel theme.
+// All colors live in `Theme`; the mascot "Mochi" is original vector art.
+// Motion steps with the existing 4 Hz position updates and is deliberately not
+// smoothed: continuous animations make the CPU renderer redraw ~60 times a
+// second (~27% of a core measured). Only brief hover transitions animate.
+
+import { ListView } from "std-widgets.slint";
+
+export struct PlaylistItem {
+    title: string,
+    count: int,
+}
+
+export struct TrackItem {
+    title: string,
+    artist: string,
+}
+
+export global Theme {
+    // Background gradient
+    out property <color> bg-a: #FFE6F1;
+    out property <color> bg-b: #EEE6FF;
+    out property <color> bg-c: #DFF8EF;
+    // Surfaces
+    out property <color> card: #FFFFFFCC;
+    out property <color> card-solid: #FFFFFF;
+    out property <color> line: #F6D9E8;
+    // Accents
+    out property <color> pink: #FF7FAF;
+    out property <color> pink-soft: #FFD6E6;
+    out property <color> lavender: #AE95FF;
+    out property <color> lavender-soft: #ECE5FF;
+    out property <color> mint: #78D9BC;
+    out property <color> mint-soft: #D5F6EB;
+    out property <color> blush: #FFB3CC;
+    // Text
+    out property <color> ink: #5A4270;
+    out property <color> ink-soft: #A48BBE;
+    out property <color> on-accent: #FFFFFF;
+    // Shape
+    out property <length> radius: 22px;
+    out property <length> radius-small: 14px;
+    out property <length> font: 14px;
+    // Surface right under the cards, for masks that round images (the CPU
+    // renderer can't clip images to rounded shapes).
+    out property <color> card-on-bg: #FFF8FB;
+    out property <color> pill-on-bg: #FFFAFC;
+}
+
+// ---------------------------------------------------------------- mascot
+
+// "Mochi": a round cat with headphones. Drawn in a 100x100 viewbox.
+component Mochi inherits Rectangle {
+    in property <bool> happy: true;
+    width: 96px;
+    height: 96px;
+    property <length> s: self.width / 40;
+
+    // ears
+    Path { width: 100%; height: 100%; viewbox-width: 100; viewbox-height: 100;
+        commands: "M 20 44 L 24 10 L 46 28 Z M 80 44 L 76 10 L 54 28 Z";
+        fill: Theme.card-solid; stroke: Theme.blush; stroke-width: root.s; }
+    Path { width: 100%; height: 100%; viewbox-width: 100; viewbox-height: 100;
+        commands: "M 27 32 L 28 19 L 38 27 Z M 73 32 L 72 19 L 62 27 Z";
+        fill: Theme.pink-soft; }
+    // face
+    Path { width: 100%; height: 100%; viewbox-width: 100; viewbox-height: 100;
+        commands: "M 50 22 C 74 22 88 38 88 58 C 88 79 71 91 50 91 C 29 91 12 79 12 58 C 12 38 26 22 50 22 Z";
+        fill: Theme.card-solid; stroke: Theme.blush; stroke-width: root.s; }
+    // headphones
+    Path { width: 100%; height: 100%; viewbox-width: 100; viewbox-height: 100;
+        commands: "M 14 54 C 14 10 86 10 86 54";
+        fill: transparent; stroke: Theme.lavender; stroke-width: root.s * 2.2; }
+    Path { width: 100%; height: 100%; viewbox-width: 100; viewbox-height: 100;
+        commands: "M 5 50 C 5 45 9 44 13 44 L 17 44 L 17 70 L 13 70 C 9 70 5 69 5 64 Z M 95 50 C 95 45 91 44 87 44 L 83 44 L 83 70 L 87 70 C 91 70 95 69 95 64 Z";
+        fill: Theme.mint; }
+    // eyes: happy arcs, or open dots when idle
+    Path { width: 100%; height: 100%; viewbox-width: 100; viewbox-height: 100;
+        visible: root.happy;
+        commands: "M 32 60 Q 37.5 52 43 60 M 57 60 Q 62.5 52 68 60";
+        fill: transparent; stroke: Theme.ink; stroke-width: root.s * 1.1; }
+    Path { width: 100%; height: 100%; viewbox-width: 100; viewbox-height: 100;
+        visible: !root.happy;
+        commands: "M 34 58 a 4 4.5 0 1 0 8 0 a 4 4.5 0 1 0 -8 0 Z M 58 58 a 4 4.5 0 1 0 8 0 a 4 4.5 0 1 0 -8 0 Z";
+        fill: Theme.ink; }
+    // blush
+    Path { width: 100%; height: 100%; viewbox-width: 100; viewbox-height: 100;
+        commands: "M 22 69 a 6 3.5 0 1 0 12 0 a 6 3.5 0 1 0 -12 0 Z M 66 69 a 6 3.5 0 1 0 12 0 a 6 3.5 0 1 0 -12 0 Z";
+        fill: Theme.blush.with-alpha(0.75); }
+    // mouth
+    Path { width: 100%; height: 100%; viewbox-width: 100; viewbox-height: 100;
+        commands: "M 44 70 Q 47 74.5 50 70 Q 53 74.5 56 70";
+        fill: transparent; stroke: Theme.ink; stroke-width: root.s; }
+}
+
+// ---------------------------------------------------------------- small parts
+
+component IconButton inherits Rectangle {
+    in property <string> icon;   // SVG path in a 24x24 viewbox
+    in property <length> size: 40px;
+    in property <bool> primary;
+    in property <bool> active: true;
+    callback clicked;
+    width: size;
+    height: size;
+    border-radius: size / 2;
+    background: primary ? (ta.has-hover ? Theme.lavender : Theme.pink) : (ta.has-hover ? Theme.lavender-soft : transparent);
+    border-width: primary ? 3px : 0px;
+    border-color: Theme.pink-soft;
+    drop-shadow-blur: primary ? 12px : 0px;
+    drop-shadow-color: Theme.pink.with-alpha(0.45);
+    drop-shadow-offset-y: primary ? 4px : 0px;
+    opacity: active ? 1 : 0.45;
+    animate background { duration: 120ms; }
+    Path {
+        width: root.size * (root.primary ? 0.46 : 0.5);
+        height: self.width;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        commands: root.icon;
+        fill: root.primary ? Theme.on-accent : Theme.ink;
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Pastel progress/volume bar with a heart thumb.
+component Bar inherits Rectangle {
+    in property <float> value;   // 0..1
+    in property <bool> heart: true;
+    callback moving(float);      // while dragging
+    callback changed(float);     // on release
+    property <bool> dragging;
+    property <float> drag-value;
+    property <float> shown: clamp(dragging ? drag-value : value, 0, 1);
+    height: 18px;
+    Rectangle {
+        y: (parent.height - self.height) / 2;
+        height: 8px;
+        border-radius: 4px;
+        background: Theme.lavender-soft;
+        Rectangle {
+            x: 0;
+            width: max(self.height, parent.width * root.shown);
+            border-radius: 4px;
+            background: Theme.pink;
+        }
+    }
+    Text {
+        text: root.heart ? "♥" : "●";
+        x: parent.width * root.shown - self.width / 2;
+        y: (parent.height - self.height) / 2 - 1px;
+        font-size: ta.has-hover || ta.pressed ? 18px : 14px;
+        color: Theme.pink;
+        animate font-size { duration: 120ms; }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        pointer-event(ev) => {
+            if (ev.kind == PointerEventKind.down || (ev.kind == PointerEventKind.move && self.pressed)) {
+                root.dragging = true;
+                root.drag-value = clamp(self.mouse-x / root.width, 0, 1);
+                root.moving(root.drag-value);
+            }
+            if (ev.kind == PointerEventKind.up && root.dragging) {
+                root.dragging = false;
+                root.changed(root.drag-value);
+            }
+        }
+    }
+}
+
+// Three bouncing bars for the track that's playing.
+component Equalizer inherits Rectangle {
+    in property <float> phase;   // seconds, advances while playing
+    in property <bool> moving;
+    width: 18px;
+    height: 16px;
+    for i in 3: Rectangle {
+        x: i * 6px;
+        width: 4px;
+        height: root.moving ? 4px + 12px * abs(Math.sin(root.phase * 410deg + i * 70deg)) : 6px;
+        y: root.height - self.height;
+        border-radius: 2px;
+        background: Theme.pink;
+    }
+}
+
+// Official "Sign in with Google" button styling (light theme), slightly rounder.
+component GoogleButton inherits Rectangle {
+    in property <bool> enabled: true;
+    callback clicked;
+    height: 44px;
+    width: 230px;
+    border-radius: 22px;
+    background: ta.has-hover && enabled ? #f6f6f6 : #ffffff;
+    border-width: 1px;
+    border-color: #747775;
+    opacity: enabled ? 1 : 0.6;
+    drop-shadow-blur: 10px;
+    drop-shadow-color: Theme.lavender.with-alpha(0.3);
+    drop-shadow-offset-y: 3px;
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        spacing: 10px;
+        alignment: center;
+        Rectangle {
+            width: 18px;
+            height: 18px;
+            y: (parent.height - self.height) / 2;
+            Path { viewbox-width: 48; viewbox-height: 48; fill: #EA4335;
+                commands: "M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"; }
+            Path { viewbox-width: 48; viewbox-height: 48; fill: #4285F4;
+                commands: "M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"; }
+            Path { viewbox-width: 48; viewbox-height: 48; fill: #FBBC05;
+                commands: "M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"; }
+            Path { viewbox-width: 48; viewbox-height: 48; fill: #34A853;
+                commands: "M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"; }
+        }
+        Text {
+            text: "Sign in with Google";
+            color: #1f1f1f;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: "Roboto";
+            vertical-alignment: center;
+        }
+    }
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Paints `color` everywhere except a circle (or rounded square) hole: laid over
+// an image, it rounds the image off against a flat background. The hole is drawn
+// in the opposite direction to the outer square (the renderer ignores even-odd).
+component ImageMask inherits Path {
+    in property <color> color;
+    in property <bool> circle: true;
+    width: 100%;
+    height: 100%;
+    viewbox-width: 100;
+    viewbox-height: 100;
+    fill-rule: evenodd;
+    fill: color;
+    commands: circle
+        ? "M -1 -1 H 101 V 101 H -1 Z M 50 0 A 50 50 0 1 0 50 100 A 50 50 0 1 0 50 0 Z"
+        : "M -1 -1 H 101 V 101 H -1 Z M 24 0 A 24 24 0 0 0 0 24 V 76 A 24 24 0 0 0 24 100 H 76 A 24 24 0 0 0 100 76 V 24 A 24 24 0 0 0 76 0 Z";
+}
+
+component Card inherits Rectangle {
+    background: Theme.card;
+    border-radius: Theme.radius;
+    border-width: 1.5px;
+    border-color: Theme.card-solid;
+    drop-shadow-blur: 18px;
+    drop-shadow-color: Theme.lavender.with-alpha(0.18);
+    drop-shadow-offset-y: 4px;
+}
+
+// Four-point star (the system font has no ✦ glyph).
+component Sparkle inherits Path {
+    in property <color> color: Theme.lavender;
+    in property <length> font-size: 14px;
+    width: self.font-size;
+    height: self.font-size;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    fill: self.color;
+    commands: "M 12 0 C 13 8 16 11 24 12 C 16 13 13 16 12 24 C 11 16 8 13 0 12 C 8 11 11 8 12 0 Z";
+}
+
+// ---------------------------------------------------------------- window controls
+
+component WindowButton inherits Rectangle {
+    in property <string> icon;          // SVG path in a 24x24 viewbox
+    in property <color> hover-color;
+    in property <color> hover-icon: Theme.ink;
+    callback clicked;
+    width: 34px;
+    height: 28px;
+    border-radius: 14px;
+    background: ta.has-hover ? hover-color : transparent;
+    animate background { duration: 100ms; }
+    Path {
+        width: 12px;
+        height: 12px;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        commands: root.icon;
+        fill: transparent;
+        stroke: ta.has-hover ? root.hover-icon : Theme.ink-soft;
+        stroke-width: 1.6px;
+    }
+    ta := TouchArea { clicked => { root.clicked(); } }
+}
+
+// Minimize / maximize / close, replacing the native title bar.
+component WindowControls inherits Rectangle {
+    in property <bool> maximized;
+    callback minimize();
+    callback toggle-maximize();
+    callback close();
+    width: row.preferred-width + 8px;
+    height: 36px;
+    border-radius: 18px;
+    background: Theme.card;
+    border-width: 1.5px;
+    border-color: Theme.card-solid;
+    row := HorizontalLayout {
+        padding: 4px;
+        spacing: 2px;
+        WindowButton {
+            icon: "M 5 12 H 19";
+            hover-color: Theme.lavender-soft;
+            clicked => { root.minimize(); }
+        }
+        WindowButton {
+            icon: root.maximized
+                ? "M 8 4 H 20 V 16 M 4 8 H 16 V 20 H 4 Z"
+                : "M 5 5 H 19 V 19 H 5 Z";
+            hover-color: Theme.mint-soft;
+            clicked => { root.toggle-maximize(); }
+        }
+        WindowButton {
+            icon: "M 6 6 L 18 18 M 18 6 L 6 18";
+            hover-color: Theme.pink;
+            hover-icon: Theme.on-accent;
+            clicked => { root.close(); }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- window
+
+export component AppWindow inherits Window {
+    title: "Reproductor ♪";
+    // Taskbar / Alt-Tab icon (the exe's own icon is embedded by build.rs).
+    icon: @image-url("../assets/icon-256.png");
+    // The app draws its own title bar (header + WindowControls).
+    no-frame: true;
+    preferred-width: 1100px;
+    preferred-height: 720px;
+    min-width: 820px;
+    min-height: 520px;
+    background: Theme.bg-a;
+    default-font-size: Theme.font;
+
+    in property <bool> signed-in;
+    in property <bool> busy;
+    in property <string> status;
+    in property <string> user-name;
+    in property <image> avatar;
+
+    in property <[PlaylistItem]> playlists;
+    in-out property <int> selected-playlist: -1;
+    in property <[TrackItem]> tracks;
+    in property <int> current-track: -1;
+
+    in property <string> now-title;
+    in property <string> now-artist;
+    in property <image> cover;
+    in property <bool> playing;
+    in property <bool> loading;
+    in property <float> position;   // seconds
+    in property <float> duration;   // seconds
+    in-out property <float> volume: 0.8;
+    in-out property <bool> shuffle;
+    in property <bool> is-maximized;
+
+    callback start-drag();
+    callback start-resize(int);
+    callback minimize();
+    callback toggle-maximize();
+    callback close-window();
+    callback sign-in();
+    callback sign-out();
+    callback select-playlist(int);
+    callback play-track(int);
+    callback toggle-play();
+    callback next();
+    callback prev();
+    callback seek(float);
+    callback set-volume(float);
+    callback shuffle-toggled(bool);
+
+    pure function fmt(secs: float) -> string {
+        let s = Math.max(0, Math.floor(secs));
+        let m = Math.floor(s / 60);
+        let r = Math.mod(s, 60);
+        return m + ":" + (r < 10 ? "0" : "") + r;
+    }
+
+    // Gentle bob, only while playing (position only advances then).
+    property <length> bob: root.playing ? 3px * Math.sin(root.position * 220deg) : 0px;
+
+    // The renderer ignores gradients on the window itself, so they go on a layer.
+    Rectangle {
+        background: @linear-gradient(135deg, Theme.bg-a 0%, Theme.bg-b 55%, Theme.bg-c 100%);
+    }
+
+    // Title-bar area: drag to move (with Windows snap), double-click to maximize.
+    // Declared first so buttons and the user pill above it still get clicks.
+    title-drag := TouchArea {
+        // The system drag starts only once the mouse moves while pressed, so a
+        // double-click still reaches `double-clicked`.
+        property <bool> armed;
+        y: 0;
+        height: 72px;
+        pointer-event(ev) => {
+            if (ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left) {
+                self.armed = true;
+            } else if (ev.kind == PointerEventKind.move && self.armed && self.pressed) {
+                self.armed = false;
+                root.start-drag();
+            } else if (ev.kind == PointerEventKind.up) {
+                self.armed = false;
+            }
+        }
+        double-clicked => { root.toggle-maximize(); }
+    }
+
+    // ---------------- sign-in screen
+    if !root.signed-in: Rectangle {
+        Sparkle { x: parent.width * 0.18; y: parent.height * 0.16; font-size: 22px; }
+        Sparkle { x: parent.width * 0.8; y: parent.height * 0.22; color: Theme.pink; }
+        Sparkle { x: parent.width * 0.12; y: parent.height * 0.74; color: Theme.mint; font-size: 18px; }
+        Sparkle { x: parent.width * 0.86; y: parent.height * 0.7; font-size: 24px; }
+        Text { x: parent.width * 0.72; y: parent.height * 0.12; text: "✿"; color: Theme.pink-soft; font-size: 40px; }
+        Text { x: parent.width * 0.22; y: parent.height * 0.82; text: "✿"; color: Theme.lavender-soft; font-size: 34px; }
+
+        Card {
+            width: 420px;
+            height: 420px;
+            VerticalLayout {
+                alignment: center;
+                spacing: 14px;
+                padding: 30px;
+                HorizontalLayout {
+                    alignment: center;
+                    Mochi { width: 150px; height: 150px; happy: true; }
+                }
+                Text {
+                    text: "Reproductor ♪";
+                    font-size: 34px;
+                    font-weight: 800;
+                    color: Theme.ink;
+                    horizontal-alignment: center;
+                }
+                Text {
+                    text: "your YouTube Music, extra cute ✿";
+                    color: Theme.ink-soft;
+                    horizontal-alignment: center;
+                }
+                Rectangle { height: 6px; }
+                HorizontalLayout {
+                    alignment: center;
+                    GoogleButton {
+                        enabled: !root.busy;
+                        clicked => { root.sign-in(); }
+                    }
+                }
+                Text {
+                    text: root.status;
+                    color: Theme.ink-soft;
+                    font-size: 12px;
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                }
+            }
+        }
+    }
+
+    // ---------------- main screen
+    if root.signed-in: VerticalLayout {
+        padding: 14px;
+        spacing: 12px;
+
+        // Header
+        HorizontalLayout {
+            height: 52px;
+            spacing: 12px;
+            Mochi { width: 46px; height: 46px; y: (parent.height - self.height) / 2; happy: root.playing; }
+            VerticalLayout {
+                alignment: center;
+                spacing: -2px;
+                Text { text: "Reproductor"; font-size: 22px; font-weight: 800; color: Theme.ink; }
+                Text {
+                    text: root.playing ? "♪ 再生中 · now playing" : "✿ ready when you are";
+                    font-size: 11px;
+                    color: root.playing ? Theme.pink : Theme.ink-soft;
+                }
+            }
+            Rectangle { horizontal-stretch: 1; }
+            // user pill
+            Rectangle {
+                width: user-row.preferred-width + 8px;
+                height: 40px;
+                y: (parent.height - self.height) / 2;
+                border-radius: 20px;
+                background: Theme.card;
+                border-width: 1.5px;
+                border-color: Theme.card-solid;
+                user-row := HorizontalLayout {
+                    padding-left: 5px;
+                    padding-right: 14px;
+                    spacing: 10px;
+                    Rectangle {
+                        width: 30px;
+                        height: 30px;
+                        y: (parent.height - self.height) / 2;
+                        border-radius: 15px;
+                        background: Theme.pink-soft;
+                        Image { source: root.avatar; width: 30px; height: 30px; image-fit: ImageFit.cover; }
+                        ImageMask { color: Theme.pill-on-bg; }
+                    }
+                    Text { text: root.user-name; color: Theme.ink; vertical-alignment: center; font-weight: 600; }
+                    Text {
+                        text: "sign out";
+                        color: so.has-hover ? Theme.pink : Theme.ink-soft;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                        so := TouchArea { mouse-cursor: pointer; clicked => { root.sign-out(); } }
+                    }
+                }
+            }
+            // room for the window controls
+            Rectangle { width: window-controls.width; }
+        }
+
+        // Body
+        HorizontalLayout {
+            vertical-stretch: 1;
+            spacing: 12px;
+
+            // Sidebar
+            Card {
+                width: 250px;
+                VerticalLayout {
+                    padding: 14px;
+                    spacing: 10px;
+                    HorizontalLayout {
+                        spacing: 6px;
+                        Text { text: "✿"; color: Theme.pink; font-size: 15px; vertical-alignment: center; }
+                        Text { text: "プレイリスト"; color: Theme.ink; font-weight: 700; vertical-alignment: center; }
+                        Text { text: "playlists"; color: Theme.ink-soft; font-size: 11px; vertical-alignment: center; }
+                        Rectangle { horizontal-stretch: 1; }
+                    }
+                    ListView {
+                        vertical-stretch: 1;
+                        for pl[i] in root.playlists: Rectangle {
+                            height: 42px;
+                            Rectangle {
+                                x: 0;
+                                y: 3px;
+                                width: parent.width - 6px;
+                                height: parent.height - 6px;
+                                border-radius: self.height / 2;
+                                background: i == root.selected-playlist ? Theme.pink
+                                    : (pta.has-hover ? Theme.lavender-soft : transparent);
+                                HorizontalLayout {
+                                    padding-left: 14px;
+                                    padding-right: 12px;
+                                    spacing: 8px;
+                                    Text {
+                                        text: i == 0 ? "♥" : "✿";
+                                        color: i == root.selected-playlist ? Theme.on-accent : (i == 0 ? Theme.pink : Theme.lavender);
+                                        vertical-alignment: center;
+                                    }
+                                    Text {
+                                        text: pl.title;
+                                        color: i == root.selected-playlist ? Theme.on-accent : Theme.ink;
+                                        font-weight: i == root.selected-playlist ? 700 : 400;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                        horizontal-stretch: 1;
+                                    }
+                                }
+                            }
+                            pta := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    root.selected-playlist = i;
+                                    root.select-playlist(i);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Tracks
+            Card {
+                VerticalLayout {
+                    padding: 16px;
+                    padding-bottom: 8px;
+                    spacing: 8px;
+                    HorizontalLayout {
+                        spacing: 10px;
+                        Text {
+                            text: root.selected-playlist >= 0 && root.selected-playlist < root.playlists.length
+                                ? root.playlists[root.selected-playlist].title : "";
+                            font-size: 22px;
+                            font-weight: 800;
+                            color: Theme.ink;
+                            overflow: elide;
+                            vertical-alignment: center;
+                        }
+                        Rectangle {
+                            width: count-text.preferred-width + 18px;
+                            height: 24px;
+                            y: (parent.height - self.height) / 2;
+                            border-radius: 12px;
+                            background: Theme.mint-soft;
+                            count-text := Text {
+                                text: root.tracks.length + " songs ♪";
+                                color: Theme.ink;
+                                font-size: 11px;
+                                font-weight: 600;
+                            }
+                        }
+                        Rectangle { horizontal-stretch: 1; }
+                        Text {
+                            text: root.status;
+                            color: Theme.ink-soft;
+                            font-size: 12px;
+                            vertical-alignment: center;
+                            horizontal-alignment: right;
+                            overflow: elide;
+                            max-width: 320px;
+                        }
+                    }
+                    ListView {
+                        vertical-stretch: 1;
+                        for tr[i] in root.tracks: Rectangle {
+                            property <bool> current: i == root.current-track;
+                            height: 54px;
+                            Rectangle {
+                                y: 2px;
+                                height: parent.height - 4px;
+                                width: parent.width - 6px;
+                                border-radius: Theme.radius-small;
+                                background: parent.current ? Theme.pink-soft.with-alpha(0.7)
+                                    : (tta.has-hover ? Theme.lavender-soft.with-alpha(0.8) : transparent);
+                                animate background { duration: 120ms; }
+                                HorizontalLayout {
+                                    padding-left: 10px;
+                                    padding-right: 14px;
+                                    spacing: 12px;
+                                    Rectangle {
+                                        width: 30px;
+                                        height: 30px;
+                                        y: (parent.height - self.height) / 2;
+                                        border-radius: 15px;
+                                        background: current ? Theme.card-solid : Theme.lavender-soft;
+                                        if !current: Text {
+                                            text: i + 1;
+                                            color: Theme.ink-soft;
+                                            font-size: 11px;
+                                            font-weight: 700;
+                                        }
+                                        if current: Equalizer {
+                                            phase: root.position;
+                                            moving: root.playing;
+                                        }
+                                    }
+                                    VerticalLayout {
+                                        alignment: center;
+                                        spacing: 1px;
+                                        Text {
+                                            text: tr.title;
+                                            color: current ? Theme.pink : Theme.ink;
+                                            font-weight: current ? 700 : 500;
+                                            overflow: elide;
+                                        }
+                                        Text { text: tr.artist; color: Theme.ink-soft; font-size: 12px; overflow: elide; }
+                                    }
+                                }
+                            }
+                            tta := TouchArea { mouse-cursor: pointer; clicked => { root.play-track(i); } }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Player
+        Rectangle {
+            height: 100px;
+            Card {
+                HorizontalLayout {
+                    padding-left: 14px;
+                    padding-right: 120px;   // room for Mochi
+                    spacing: 18px;
+
+                    // now playing
+                    HorizontalLayout {
+                        width: 290px;
+                        spacing: 12px;
+                        Rectangle {
+                            width: 68px;
+                            height: 68px;
+                            y: (parent.height - self.height) / 2;
+                            border-radius: 18px;
+                            background: Theme.lavender-soft;
+                            Text { text: "♪"; color: Theme.lavender; font-size: 26px; }
+                            Image { source: root.cover; width: 100%; height: 100%; image-fit: ImageFit.cover; }
+                            ImageMask { color: Theme.card-on-bg; circle: false; }
+                            Rectangle {
+                                border-radius: 18px;
+                                border-width: 3px;
+                                border-color: Theme.pink-soft;
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 2px;
+                            Text {
+                                text: root.now-title != "" ? root.now-title : "pick a song ✿";
+                                color: Theme.ink;
+                                font-weight: 700;
+                                overflow: elide;
+                            }
+                            Text {
+                                text: root.loading ? "loading… ♪" : root.now-artist;
+                                color: root.loading ? Theme.pink : Theme.ink-soft;
+                                font-size: 12px;
+                                overflow: elide;
+                            }
+                        }
+                    }
+
+                    // controls + progress
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        alignment: center;
+                        spacing: 6px;
+                        HorizontalLayout {
+                            alignment: center;
+                            spacing: 14px;
+                            IconButton {
+                                size: 34px;
+                                active: root.shuffle;
+                                icon: "M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z";
+                                clicked => {
+                                    root.shuffle = !root.shuffle;
+                                    root.shuffle-toggled(root.shuffle);
+                                }
+                            }
+                            IconButton { icon: "M6 6h2v12H6zm3.5 6 8.5 6V6z"; clicked => { root.prev(); } }
+                            IconButton {
+                                primary: true;
+                                size: 52px;
+                                icon: root.playing ? "M7 19h3.5V5H7v14zm6.5-14v14H17V5h-3.5z" : "M8 5.5v13a1 1 0 0 0 1.5.86l10.2-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z";
+                                clicked => { root.toggle-play(); }
+                            }
+                            IconButton { icon: "M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"; clicked => { root.next(); } }
+                            Rectangle { width: 34px; }
+                        }
+                        HorizontalLayout {
+                            spacing: 10px;
+                            Text { text: root.fmt(root.position); color: Theme.ink-soft; font-size: 11px; vertical-alignment: center; width: 40px; horizontal-alignment: right; }
+                            Bar {
+                                horizontal-stretch: 1;
+                                value: root.duration > 0 ? root.position / root.duration : 0;
+                                changed(v) => { root.seek(v * root.duration); }
+                            }
+                            Text { text: root.fmt(root.duration); color: Theme.ink-soft; font-size: 11px; vertical-alignment: center; width: 40px; }
+                        }
+                    }
+
+                    // volume
+                    HorizontalLayout {
+                        width: 150px;
+                        spacing: 8px;
+                        alignment: end;
+                        Text { text: "♪"; color: Theme.lavender; font-size: 16px; vertical-alignment: center; }
+                        Bar {
+                            width: 110px;
+                            y: (parent.height - self.height) / 2;
+                            heart: false;
+                            value: root.volume;
+                            moving(v) => { root.set-volume(v); }
+                            changed(v) => { root.volume = v; root.set-volume(v); }
+                        }
+                    }
+                }
+            }
+            // Mochi peeks over the player's top-right edge
+            Mochi {
+                width: 92px;
+                height: 92px;
+                x: parent.width - self.width - 16px;
+                y: -30px + root.bob;
+                happy: root.playing;
+            }
+            if root.playing: Text {
+                text: "♪";
+                x: parent.width - 132px;
+                y: -26px - root.bob;
+                color: Theme.pink;
+                font-size: 18px;
+            }
+        }
+    }
+
+    // Window controls, top right on every screen (on top of everything).
+    window-controls := WindowControls {
+        x: parent.width - self.width - 14px;
+        y: 22px;
+        maximized: root.is-maximized;
+        minimize => { root.minimize(); }
+        toggle-maximize => { root.toggle-maximize(); }
+        close => { root.close-window(); }
+    }
+
+    // Resize handles along the edges (a frameless window has none). Pressing one
+    // starts the system resize. Directions: 0 N, 1 S, 2 E, 3 W, 4 NE, 5 NW, 6 SE, 7 SW.
+    if !root.is-maximized: Rectangle {
+        property <length> edge: 6px;
+        property <length> corner: 14px;
+        TouchArea { x: corner; y: 0; width: parent.width - 2 * corner; height: edge; mouse-cursor: ns-resize;
+            pointer-event(ev) => { if (ev.kind == PointerEventKind.down) { root.start-resize(0); } } }
+        TouchArea { x: corner; y: parent.height - edge; width: parent.width - 2 * corner; height: edge; mouse-cursor: ns-resize;
+            pointer-event(ev) => { if (ev.kind == PointerEventKind.down) { root.start-resize(1); } } }
+        TouchArea { x: parent.width - edge; y: corner; width: edge; height: parent.height - 2 * corner; mouse-cursor: ew-resize;
+            pointer-event(ev) => { if (ev.kind == PointerEventKind.down) { root.start-resize(2); } } }
+        TouchArea { x: 0; y: corner; width: edge; height: parent.height - 2 * corner; mouse-cursor: ew-resize;
+            pointer-event(ev) => { if (ev.kind == PointerEventKind.down) { root.start-resize(3); } } }
+        TouchArea { x: parent.width - corner; y: 0; width: corner; height: corner; mouse-cursor: nesw-resize;
+            pointer-event(ev) => { if (ev.kind == PointerEventKind.down) { root.start-resize(4); } } }
+        TouchArea { x: 0; y: 0; width: corner; height: corner; mouse-cursor: nwse-resize;
+            pointer-event(ev) => { if (ev.kind == PointerEventKind.down) { root.start-resize(5); } } }
+        TouchArea { x: parent.width - corner; y: parent.height - corner; width: corner; height: corner; mouse-cursor: nwse-resize;
+            pointer-event(ev) => { if (ev.kind == PointerEventKind.down) { root.start-resize(6); } } }
+        TouchArea { x: 0; y: parent.height - corner; width: corner; height: corner; mouse-cursor: nesw-resize;
+            pointer-event(ev) => { if (ev.kind == PointerEventKind.down) { root.start-resize(7); } } }
+    }
+}

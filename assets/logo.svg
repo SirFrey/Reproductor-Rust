@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- Reproductor logo: Mochi (the app's mascot) on a pastel tile. Original artwork. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF9EC4"/>
+      <stop offset="0.55" stop-color="#D4A9FF"/>
+      <stop offset="1" stop-color="#A8E6D2"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="58" fill="url(#tile)"/>
+  <!-- sparkles -->
+  <path d="M 208 34 C 209.5 45 213 48.5 224 50 C 213 51.5 209.5 55 208 66 C 206.5 55 203 51.5 192 50 C 203 48.5 206.5 45 208 34 Z" fill="#FFFFFF" opacity="0.9"/>
+  <path d="M 44 186 C 45 193 47 195 54 196 C 47 197 45 199 44 206 C 43 199 41 197 34 196 C 41 195 43 193 44 186 Z" fill="#FFFFFF" opacity="0.8"/>
+  <!-- Mochi, drawn in its 100x100 space -->
+  <g transform="translate(30 36) scale(1.96)">
+    <path d="M 20 44 L 24 10 L 46 28 Z M 80 44 L 76 10 L 54 28 Z" fill="#FFFFFF" stroke="#FF8DB7" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M 27 32 L 28 19 L 38 27 Z M 73 32 L 72 19 L 62 27 Z" fill="#FFD0E2"/>
+    <path d="M 50 22 C 74 22 88 38 88 58 C 88 79 71 91 50 91 C 29 91 12 79 12 58 C 12 38 26 22 50 22 Z" fill="#FFFFFF" stroke="#FF8DB7" stroke-width="3"/>
+    <path d="M 14 54 C 14 10 86 10 86 54" fill="none" stroke="#8E6BFF" stroke-width="6.5" stroke-linecap="round"/>
+    <path d="M 5 50 C 5 45 9 44 13 44 L 17 44 L 17 70 L 13 70 C 9 70 5 69 5 64 Z M 95 50 C 95 45 91 44 87 44 L 83 44 L 83 70 L 87 70 C 91 70 95 69 95 64 Z" fill="#5FCFAE"/>
+    <path d="M 32 60 Q 37.5 52 43 60 M 57 60 Q 62.5 52 68 60" fill="none" stroke="#5A4270" stroke-width="3.6" stroke-linecap="round"/>
+    <path d="M 22 69 a 6 3.5 0 1 0 12 0 a 6 3.5 0 1 0 -12 0 Z M 66 69 a 6 3.5 0 1 0 12 0 a 6 3.5 0 1 0 -12 0 Z" fill="#FFA6C6"/>
+    <path d="M 44 70 Q 47 74.5 50 70 Q 53 74.5 56 70" fill="none" stroke="#5A4270" stroke-width="3" stroke-linecap="round"/>
+  </g>
+</svg>
